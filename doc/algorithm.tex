@@ -1,0 +1,95 @@
+% LaTeX document describing the sampling algorithm.
+% Use pdflatex to generate a PDF.
+
+\documentclass{article}
+
+\usepackage{amsmath}
+
+\title{Algorithm for Sampling from Discrete Distributions}
+\author{D\'avid P\'al}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This short note describes an algorithm for drawing random samples from any
+discrete (categorical) distribution, given as an input, in $O(1)$ time per
+sample.  If the distribution has support on $N$ elements, the algorithm needs
+$O(N)$ memory and $O(N)$ pre-processing time.
+\end{abstract}
+
+\section{Introduction}
+\label{section:introduction}
+
+Generating random numbers from various probability distributions is an
+important task in many scientific and industrial applications. In this short
+note, we describe an algorithm for generating random numbers from a discrete
+distributions, also called \emph{categorical distribution}~\cite{wikipedia}.
+
+A discrete distribution is specified by $N$ non-negative real numbers
+$p_1, p_2, \dots, p_N$ that satisfy
+$$
+p_1 + p_2 + \dots + p_N = 1 \; .
+$$
+A sample from the distribution is a number from the set $\{1,2,\dots,N\}$.
+Number $i \in \{1,2,\dots,N\}$ is generated with probability $p_i$.  The number
+$N$ is called the number of categories or size of the support.
+
+In practical implementations, the algorithm is given as an input
+a list of arbitrary non-negative numbers $w_1, w_2, \dots, w_N$
+with positive sum and the goal is to generate samples from the discrete
+distribution specified by $p_1, p_2, \dots, p_N$ where
+$$
+p_i = \frac{w_i}{\sum_{i=1}^N w_i} \; .
+$$
+Transforming $w_1, w_2, \dots, w_N$ to $p_1, p_2, \dots, p_N$ is easily
+achieved in $O(N)$ time as part pre-processing phase.  In the rest of the
+paper, we assume this has been done.
+
+The problem of generating random numbers from a distribution is to design an
+algorithm that receives numbers $p_1, p_2, \dots, p_N$ as an input,
+pre-processes them, and is able to generate any number of independent samples
+from the distribution. We make the standard assumption that the algorithm has
+access to a random number generator that generates independent random numbers
+uniformly from the unit interval $[0,1]$ in $O(1)$ time per sample.
+
+Naive, but fairly common, algorithm requires $O(N)$ pre-processing time, $O(N)$
+memory, and can generate sample in $O(\log N)$ time.\footnote{All time and
+memory complexities are in the worst-case sense.} As of year 2015, the naive
+algorithm is used in many implementations of the C++ Standard
+Library~\cite{STL}.  We recap the algorithm in
+Section~\ref{section:naive-algorithm}.
+
+In Section~\ref{section:fast-algorithm}, we describe a faster algorithm that
+uses $O(N)$ memory, has $O(N)$ pre-processing time, but requires only $O(1)$
+time to generate a sample.  The space and time complexities are clearly
+optimal.
+
+\section{Naive Algorithm}
+\label{section:naive-algorithm}
+
+In the pre-processing phase, the naive algorithm computes prefix sums $s_0,
+s_1, s_2, \dots, s_N$ where $s_0 = 0$ and for $i=1,2,\dots,N$
+$$
+s_i = p_1 + p_2 + \dots + p_i \; .
+$$
+The prefix sums can be computed in $O(N)$ time and use $O(N)$ memory.
+
+To generate a sample the algorithm makes a single call to the random number
+generator and let $X$ be the number it obtains. Using
+binary search, the algorithm finds an index $i \in \{1,2,\dots,N\}$ such that
+$$
+s_{i-1} \le X \le s_i \; .
+$$
+It is not hard to see that index $i$ is chosen with probability $s_i - s_{i-1}
+= p_i$.
+
+\section{Fast Algorithm}
+\label{section:fast-algorithm}
+
+The faster algorithm splits the input
+
+TODO
+
+\end{document}

@@ -140,7 +140,29 @@ class DiscreteDistribution {
     std::uniform_real_distribution<double> distribution;
 };
 
-int main() {
-  DiscreteDistribution d({1, 1, 2});
+void Test(const std::vector<double>& weights, const size_t nrolls) {
+  DiscreteDistribution d(weights);
   d.PrintBuckets();
+
+  std::vector<size_t> counts(weights.size(), 0);
+  for (size_t i = 0; i < nrolls; ++i) {
+    const int number = d.GetSample();
+    ++counts[number];
+  }
+
+  std::cout << "counts:" << std::endl;
+  for (size_t i = 0; i < weights.size(); ++i)
+    cout << i << " (" << weights[i] << ") : "
+         << std::string(counts[i], '*') << endl;
+
+  cout << endl;
+}
+
+int main() {
+  Test({1, 1, 1}, 300);
+  Test({1, 1}, 200);
+  Test({1}, 100);
+  Test({1, 1, 2}, 300);
+  Test({1, 0, 2}, 300);
+  return 0;
 }

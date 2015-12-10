@@ -8,7 +8,9 @@
 //   g++ -Wall -Wextra -Werror -std=c++11 discrete-distribution.cc
 
 #include <cmath>
+#include <initializer_list>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <random>
 #include <tuple>
@@ -17,62 +19,76 @@
 using std::cout;
 using std::endl;
 
-// Simple stack with fixed capacity.
-template<typename T>
-class FixedSizeStack {
+// Stack that does not own the underlying storage.
+template<typename T, typename BidirectionalIterator>
+class stack_view {
   public:
-    FixedSizeStack(const size_t capacity) : top(0) {
-      data.reserve(capacity);
-    }
+    stack_view(const BidirectionalIterator base)
+      : base_(base), top_(base) { };
 
     void push(const T& element) {
-      if (data.size() > top) {
-        data[top] = element;
-      } else {
-        data.push_back(element);
-      }
-      ++top;
+      *top_ = element;
+      ++top_;
     }
 
-    T& pop() {
-      return data[--top];
+    T pop() {
+      --top_;
+      return *top_;
     }
 
-    size_t size() {
-      return top;
+    bool empty() {
+      return top_ == base_;
     }
 
   private:
-    size_t top;
-    std::vector<T> data;
+    const BidirectionalIterator base_;
+    BidirectionalIterator top_;
 };
 
-
-class DiscreteDistribution {
+template<typename IntType = int>
+class fast_discrete_distribution {
   public:
-    DiscreteDistribution(const std::vector<double>& weights)
-      : generator(),
-        distribution(0.0, 1.0) {
-      Preprocess(weights);
+    typedef IntType result_type;
+
+    fast_discrete_distribution(const std::vector<double>& weights)
+      : uniform_distribution_(0.0, 1.0) {
+      normalize_weights(weights);
+      create_buckets();
     }
 
-    size_t GetSample() {
-      const double number = distribution(generator);
-      size_t index = floor(buckets.size() * number);
+    result_type operator()(std::default_random_engine& generator) {
+      const double number = uniform_distribution_(generator);
+      size_t index = floor(buckets_.size() * number);
 
       // Fix index
-      if (index >= buckets.size()) index = buckets.size() - 1;
+      if (index >= buckets_.size()) index = buckets_.size() - 1;
 
-      const Bucket& bucket = buckets[index];
+      const Bucket& bucket = buckets_[index];
       if (number < std::get<2>(bucket))
         return std::get<0>(bucket);
       else
         return std::get<1>(bucket);
     }
 
+    result_type min() const {
+      return 0;
+    }
+
+    result_type max() const {
+      return probabilities_.size();
+    }
+
+    std::vector<double> probabilities() const {
+      return probabilities_;
+    }
+
+    void reset() {
+      // Empty
+    }
+
     void PrintBuckets() {
-      cout << "buckets.size() = " << buckets.size() << endl;
-      for (auto bucket : buckets) {
+      cout << "buckets.size() = " << buckets_.size() << endl;
+      for (auto bucket : buckets_) {
         cout << std::get<0>(bucket) << "  "
              << std::get<1>(bucket) << "  "
              << std::get<2>(bucket) << "  "
@@ -82,71 +98,84 @@ class DiscreteDistribution {
 
   private:
     typedef std::pair<double, size_t> Segment;
-    typedef std::tuple<size_t, size_t, double> Bucket;
+    typedef std::tuple<result_type, result_type, double> Bucket;
 
-    void Preprocess(const std::vector<double>& weights) {
-      const double sum = std::accumulate(weights.cbegin(), weights.cend(), 0.0);
+    void normalize_weights(const std::vector<double>& weights) {
+      const double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+      probabilities_.reserve(weights.size());
+      for (auto weight : weights) {
+        probabilities_.push_back(weight / sum);
+      }
+    }
 
-      // Reserve capacity to avoid reallocations.
-      // This might take twice as much memory as is actually needed.
-      const size_t N = weights.size();
-      FixedSizeStack<Segment> small(N);
-      FixedSizeStack<Segment> big(N);
+    void create_buckets() {
+      // Two stacks in one vector.  First stack grows from the begining of the
+      // vector. The second stack grow from the end of the vector.
+      const size_t N = probabilities_.size();
+      std::vector<Segment> segments(N);
+      stack_view<Segment, std::vector<Segment>::iterator>
+        small(segments.begin());
+      stack_view<Segment, std::vector<Segment>::reverse_iterator>
+        large(segments.rbegin());
 
-      // Normalize the probabilities.
-      for (size_t i = 0; i < weights.size(); ++i) {
-        const double probability = weights[i] / sum;
-        if (probability < (1.0 / N))
+      // Split probabilities into small and large.
+      result_type i = 0;
+      for (auto probability : probabilities_) {
+        if (probability < (1.0 / N)) {
           small.push(Segment(probability, i));
-        else
-          big.push(Segment(probability, i));
+        } else {
+          large.push(Segment(probability, i));
+        }
+        ++i;
       }
 
-      buckets.reserve(N);
+      buckets_.reserve(N);
 
-      size_t i = 0;
-      while (small.size() > 0) {
+      i = 0;
+      while (!small.empty()) {
         const Segment s = small.pop();
-        const Segment b = big.pop();
+        const Segment l = large.pop();
 
         // Create a mixed bucket
-        buckets.emplace_back(s.second,
-                             b.second,
+        buckets_.emplace_back(s.second,
+                             l.second,
                              s.first + static_cast<double>(i) / N);
 
         // Calculate the length of the left-over segment
-        const double left_over = s.first + b.first - static_cast<double>(i) / N;
+        const double left_over = s.first + l.first - static_cast<double>(i) / N;
 
         // Re-insert the left-over segment
         if (left_over < (1.0 / N))
-          small.push(Segment(left_over, b.second));
+          small.push(Segment(left_over, l.second));
         else
-          big.push(Segment(left_over, b.second));
+          large.push(Segment(left_over, l.second));
 
         ++i;
       }
 
       // Create pure buckets
-      while (big.size() > 0) {
-        const Segment b = big.pop();
-        buckets.emplace_back(b.second, b.second, 0.0);
+      while (!large.empty()) {
+        const Segment l = large.pop();
+        buckets_.emplace_back(l.second, l.second, 0.0);
       }
     }
 
-    std::vector<Bucket> buckets;
+    // Uniform distribution over interval [0,1].
+    std::uniform_real_distribution<double> uniform_distribution_;
 
-    // Random number generator and uniform distribution.
-    std::default_random_engine generator;
-    std::uniform_real_distribution<double> distribution;
+    // List of probabilities
+    std::vector<double> probabilities_;
+    std::vector<Bucket> buckets_;
 };
 
 void Test(const std::vector<double>& weights, const size_t nrolls) {
-  DiscreteDistribution d(weights);
-  d.PrintBuckets();
+  std::default_random_engine generator;
+  fast_discrete_distribution<int> distribution(weights);
+  distribution.PrintBuckets();
 
   std::vector<size_t> counts(weights.size(), 0);
   for (size_t i = 0; i < nrolls; ++i) {
-    const int number = d.GetSample();
+    const int number = distribution(generator);
     ++counts[number];
   }
 
@@ -159,10 +188,15 @@ void Test(const std::vector<double>& weights, const size_t nrolls) {
 }
 
 int main() {
+  Test({0}, 100);
+  Test({0, 1e-20, 0}, 100);
   Test({1, 1, 1}, 300);
   Test({1, 1}, 200);
   Test({1}, 100);
   Test({1, 1, 2}, 300);
   Test({1, 0, 2}, 300);
+
+  std::discrete_distribution<int> distribution({10.0, 20.0, 30.0});
+  cout << distribution << endl;
   return 0;
 }

@@ -24,10 +24,10 @@
 \maketitle
 
 \begin{abstract}
-This short note describes an algorithm for drawing random samples from any
-discrete (categorical) distribution, given as an input, in $O(1)$ time per
-sample.  If the distribution has support on $N$ elements, the algorithm needs
-$O(N)$ memory and $O(N)$ pre-processing time.
+We describe an algorithm for generating random samples from any discrete
+(categorical) distribution, given as an input, in $O(1)$ time per sample.  If
+the distribution has $N$ categories, the algorithm needs $O(N)$ memory and
+$O(N)$ pre-processing time.
 \end{abstract}
 
 \section{Introduction}
@@ -46,7 +46,7 @@ p_1 + p_2 + \dots + p_N = 1 \; .
 $$
 A sample from the distribution is a number from the set $\{1,2,\dots,N\}$.
 Number $i \in \{1,2,\dots,N\}$ is generated with probability $p_i$.  The number
-$N$ is called the number of categories or size of the support.
+$N$ is called the number of categories.
 
 In practical implementations, the algorithm is given as an input
 a list of arbitrary non-negative numbers $w_1, w_2, \dots, w_N$
@@ -56,21 +56,21 @@ $$
 p_i = \frac{w_i}{\sum_{i=1}^N w_i} \; .
 $$
 Transforming $w_1, w_2, \dots, w_N$ to $p_1, p_2, \dots, p_N$ is easily
-achieved in $O(N)$ time as part pre-processing phase.  In the rest of the
-paper, we assume this has been done.
+achieved in $O(N)$ time as part of the pre-processing phase.  In the rest of
+the paper, we assume this has been done.
 
 The problem of generating random numbers from a distribution is to design an
 algorithm that receives numbers $p_1, p_2, \dots, p_N$ as an input,
 pre-processes them, and is able to generate any number of independent samples
 from the distribution. We make the standard assumption that the algorithm has
-access to a random number generator that generates independent random numbers
-uniformly from the unit interval $[0,1]$ in $O(1)$ time per sample.
+access to a random number generator that generates independent random real
+numbers uniformly from the unit interval $[0,1]$ in $O(1)$ time per sample.
 
 Naive, but fairly common, algorithm requires $O(N)$ pre-processing time, $O(N)$
 memory, and can generate sample in $O(\log N)$ time.\footnote{All time and
 memory complexities are in the worst-case sense.} As of year 2015, the naive
-algorithm is used in many implementations of the C++ Standard
-Library~\cite{STL}.  We recap the algorithm in
+algorithm is used in popular implementations of the C++ standard
+library~\cite{gcc-libstdc++,clang-libc++}.  We recap the algorithm in
 Section~\ref{section:naive-algorithm}.
 
 In Section~\ref{section:fast-algorithm}, we describe a faster algorithm that
@@ -100,18 +100,18 @@ It is not hard to see that index $i$ is chosen with probability $s_i - s_{i-1}
 \section{Fast Algorithm}
 \label{section:fast-algorithm}
 
-The difference between the naive and the fast algorithm is in preprocessing
-starts with pre-processing.  Given $p_1, p_2, \dots, p_N$, think of each $p_i$
-as line segment of length $p_i$ and having color $i$.  The algorithm cuts the
-line segments into $2N$ smaller line segments. During cutting each point of each
+The difference between the naive and the fast algorithm starts with the
+pre-processing phase.  Given $p_1, p_2, \dots, p_N$, think of each $p_i$ as a
+line segment of length $p_i$ and color $i$.  The algorithm cuts the line
+segments into $2N$ smaller line segments. During cutting each point of each
 line segment keeps its original color. Let $q_1, q_2, \dots, q_{2N}$ be the
-lengths resulting line segments. Their length will satisfy
+lengths of the resulting line segments. Their length will satisfy
 \begin{equation}
 \label{equation:two-segments}
-q_{2i - 1} + q_{2i} = \frac{1}{N} \; .
+q_{2i - 1} + q_{2i} = \frac{1}{N}
 \end{equation}
-In other words, if we connect segments $q_{2i}$ and $q_{2i-1}$ we get
-segment of length exactly $1/N$.
+for $i=1,2,\dots,N$.  In other words, if we connect segments $q_{2i}$ and
+$q_{2i-1}$ we get segment of length exactly $1/N$.
 
 It is a non-trivial fact that any $p_1, p_2, \dots, p_N$ can be cut into $q_1,
 q_2, \dots, q_{2N}$ satisfying equation \eqref{equation:two-segments}.
@@ -143,14 +143,15 @@ subinterval, algorithm outputs the color of line segment $q_{2i-1}$. Otherwise,
 $X$ lies in the second subinterval and the algorithm outputs the color of
 line segment $q_{2i}$.
 
-\subsection{How to Cut the Rectangles}
+\subsection{How to Cut the Line Segments?}
 \label{subsection:cutting}
 
-We split the line segments $p_1, p_2, \dots, p_N$ into two lists: short and
+We split the line segments $p_1, p_2, \dots, p_N$ into two types: short and
 long. Short ones are those that have length smaller than $1/N$. Long ones have
 length $1/N$ or bigger. Notice that there must be at least one long line
-segment; since if all $N$ line segments were short, their total length smaller
+segment; since if all $N$ line segments were short, their total length
 would be less than $1$.
+
 
 The algorithm then consists of $N$ rounds. In each round $i=1,2,\dots,N$, it
 constructs $q_{2i-1}$ and $q_{2i}$ satisfying \eqref{equation:two-segments}.
@@ -159,7 +160,7 @@ The construction of the pair $q_{2i-1}, q_{2i}$ will be done in $O(1)$ time.
 In any round $i$, the algorithm takes an arbitrary short line segment and an
 arbitrary long line segment. Let $s$ be the length of the short line segment
 and let $\ell$ be the length of long line segment. We remove $s$ and $\ell$
-from their respective lists. The line segment $q_{2i-1}$ will be the short
+from their respective piles. The line segment $q_{2i-1}$ will be the short
 segment, i.e., $q_{2i-1} = s$ and the color of $q_{2i-1}$ will be the color of
 $s$.  The line segment $q_{2i}$ will be cut from the long line segment $\ell$,
 i.e., $q_{2i} = \frac{1}{N} - s$ and $q_{2i}$ will have the color of $\ell$.
@@ -171,13 +172,13 @@ left-over line segment into the corresponding list.
 
 First, notice that by construction $q_{2i-1}$ and $q_{2i}$ satisfy
 \eqref{equation:two-segments}.  Second, notice that in each round we decrease
-the number of line segments in the two lists by one: We remove $2$ line
+the number of line segments in the two piles by one: We remove $2$ line
 segments and we insert one left-over line segment back. Thus, the algorithm in
-exactly $N$ rounds removes all line segments from the two lists. Finally,
+exactly $N$ rounds removes all line segments from the two piles. Finally,
 notice that at the beginning of round $i$ there are $N-i+1$ line segments in
-the two lists and their length is $1 - \frac{i-1}{N}$, since in each of the
+the two piles and their length is $1 - \frac{i-1}{N}$, since in each of the
 previous $i-1$ rounds we have decreased the total length by $1/N$. Therefore,
-at the beginning of the round $i$, at least one line segment in the two lists
+at the beginning of the round $i$, at least one line segment in the two piles
 will have length at least
 $$
 \frac{1 - \frac{i-1}{N}}{N - i + 1}
@@ -187,13 +188,17 @@ $$
 In other words, there is at least one long line segment at the beginning of
 every round.
 
-It could happen, that at beginning of round $i$ there is no short line segment.
-That means all (long) line segments have length $1/N$. This follows from that
-there are $N-i+1$ long line segments and their total length is
+It could happen that at the beginning of round $i$ there is no short line
+segment.  That means all (long) line segments have length $1/N$. This follows
+from that there are $N-i+1$ long line segments and their total length is
 $\frac{N-i+1}{N}$. In that case, we can simply create $N-i+1$ pairs of line
 segments $(q_{2i-1}, q_{2i}), (q_{2i+1}, q_{2i+2}), \dots, (q_{2N-1}, q_{2N})$.
 The first line segment in each pair is constructed from a long line segment and
-the second line segment in each pair have zero length and arbitrary color.
+the second line segment in each pair has zero length of arbitrary color.
+
+The two piles can be implemented using two stacks stored in the same array of
+size $N$.  The stacks have their bottoms at the opposite ends of the array and
+grow inward.
 
 \bibliographystyle{plain}
 \bibliography{biblio}

@@ -8,6 +8,7 @@
 //   g++ -Wall -Wextra -Werror -std=c++11 discrete-distribution.cc
 
 #include <cmath>
+#include <cassert>
 #include <initializer_list>
 #include <iostream>
 #include <iterator>
@@ -19,6 +20,7 @@
 using std::cout;
 using std::endl;
 
+namespace {
 // Stack that does not own the underlying storage.
 template<typename T, typename BidirectionalIterator>
 class stack_view {
@@ -44,6 +46,7 @@ class stack_view {
     const BidirectionalIterator base_;
     BidirectionalIterator top_;
 };
+}
 
 template<typename IntType = int>
 class fast_discrete_distribution {
@@ -60,7 +63,7 @@ class fast_discrete_distribution {
       const double number = uniform_distribution_(generator);
       size_t index = floor(buckets_.size() * number);
 
-      // Fix index
+      // Fix index.  TODO: This probably not necessary?
       if (index >= buckets_.size()) index = buckets_.size() - 1;
 
       const Bucket& bucket = buckets_[index];
@@ -71,11 +74,13 @@ class fast_discrete_distribution {
     }
 
     result_type min() const {
-      return 0;
+      return static_cast<result_type>(0);
     }
 
     result_type max() const {
-      return probabilities_.size();
+      return probabilities_.empty()
+             ? static_cast<result_type>(0)
+             : static_cast<result_type>(probabilities_.size() - 1);
     }
 
     std::vector<double> probabilities() const {
@@ -97,6 +102,8 @@ class fast_discrete_distribution {
     }
 
   private:
+    // TODO: Figure out how to replace size_t in Segment with result_type.
+    // GCC 4.8.4 refuses to compile it.
     typedef std::pair<double, size_t> Segment;
     typedef std::tuple<result_type, result_type, double> Bucket;
 
@@ -109,16 +116,21 @@ class fast_discrete_distribution {
     }
 
     void create_buckets() {
-      // Two stacks in one vector.  First stack grows from the begining of the
-      // vector. The second stack grow from the end of the vector.
       const size_t N = probabilities_.size();
+      if (N <= 0) {
+        buckets_.emplace_back(0, 0, 0.0);
+        return;
+      }
+
+      // Two stacks in one vector.  First stack grows from the begining of the
+      // vector. The second stack grows from the end of the vector.
       std::vector<Segment> segments(N);
       stack_view<Segment, std::vector<Segment>::iterator>
         small(segments.begin());
       stack_view<Segment, std::vector<Segment>::reverse_iterator>
         large(segments.rbegin());
 
-      // Split probabilities into small and large.
+      // Split probabilities into small and large
       result_type i = 0;
       for (auto probability : probabilities_) {
         if (probability < (1.0 / N)) {
@@ -132,14 +144,13 @@ class fast_discrete_distribution {
       buckets_.reserve(N);
 
       i = 0;
-      while (!small.empty()) {
+      while (!small.empty() && !large.empty()) {
         const Segment s = small.pop();
         const Segment l = large.pop();
 
         // Create a mixed bucket
-        buckets_.emplace_back(s.second,
-                             l.second,
-                             s.first + static_cast<double>(i) / N);
+        buckets_.emplace_back(s.second, l.second,
+                              s.first + static_cast<double>(i) / N);
 
         // Calculate the length of the left-over segment
         const double left_over = s.first + l.first - static_cast<double>(i) / N;
@@ -156,7 +167,17 @@ class fast_discrete_distribution {
       // Create pure buckets
       while (!large.empty()) {
         const Segment l = large.pop();
+        // The last argument is irrelevant as long it's not a NaN.
         buckets_.emplace_back(l.second, l.second, 0.0);
+      }
+
+      // This loop can be executed only due to numerical inaccuracies.
+      // TODO: Find an example when it actually happens.
+      while (!small.empty()) {
+        const Segment s = small.pop();
+        cout << "Here" << endl;
+        // The last argument is irrelevant as long it's not a NaN.
+        buckets_.emplace_back(s.second, s.second, 0.0);
       }
     }
 
@@ -168,14 +189,16 @@ class fast_discrete_distribution {
     std::vector<Bucket> buckets_;
 };
 
-void Test(const std::vector<double>& weights, const size_t nrolls) {
+void Test(const std::vector<double>& weights, const size_t num_samples) {
   std::default_random_engine generator;
   fast_discrete_distribution<int> distribution(weights);
   distribution.PrintBuckets();
 
   std::vector<size_t> counts(weights.size(), 0);
-  for (size_t i = 0; i < nrolls; ++i) {
+  for (size_t i = 0; i < num_samples; ++i) {
     const int number = distribution(generator);
+    assert(number >= 0);
+    assert(number < static_cast<int>(weights.size()));
     ++counts[number];
   }
 
@@ -187,14 +210,28 @@ void Test(const std::vector<double>& weights, const size_t nrolls) {
   cout << endl;
 }
 
+void TestEmpty(const size_t num_samples) {
+  std::default_random_engine generator;
+  fast_discrete_distribution<int> distribution({});
+  distribution.PrintBuckets();
+
+  for (size_t i = 0; i < num_samples; ++i) {
+    const int number = distribution(generator);
+    assert(number == 0);
+  }
+}
+
 int main() {
+  TestEmpty(100);
   Test({0}, 100);
-  Test({0, 1e-20, 0}, 100);
-  Test({1, 1, 1}, 300);
-  Test({1, 1}, 200);
   Test({1}, 100);
+  Test({1, 1}, 200);
+  Test({1, 1, 1}, 300);
   Test({1, 1, 2}, 300);
   Test({1, 0, 2}, 300);
+  Test({20, 10, 30}, 300);
+  Test({0, 1e-20, 0}, 100);
+  Test({1 - 1e-10, 1 - 1e-10, 1 - 1e-10}, 100);
 
   std::discrete_distribution<int> distribution({10.0, 20.0, 30.0});
   cout << distribution << endl;

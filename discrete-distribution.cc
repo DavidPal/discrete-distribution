@@ -153,7 +153,7 @@ class fast_discrete_distribution {
                               s.first + static_cast<double>(i) / N);
 
         // Calculate the length of the left-over segment
-        const double left_over = s.first + l.first - static_cast<double>(i) / N;
+        const double left_over = s.first + l.first - static_cast<double>(1) / N;
 
         // Re-insert the left-over segment
         if (left_over < (1.0 / N))
